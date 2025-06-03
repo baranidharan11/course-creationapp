@@ -1,10 +1,19 @@
-
 import React, { useState, useEffect } from 'react';
 
 const CourseViewModal = ({ isOpen, onClose, courseId }) => {
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    title: '',
+    description: '',
+    level: '',
+    category: '',
+    subcategory: '',
+    coverImage: ''
+  });
+  const [updateLoading, setUpdateLoading] = useState(false);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -37,6 +46,15 @@ const CourseViewModal = ({ isOpen, onClose, courseId }) => {
 
         const data = await response.json();
         setCourse(data);
+        // Populate edit form with current course data
+        setEditFormData({
+          title: data.title || '',
+          description: data.description || '',
+          level: data.level || '',
+          category: data.category || '',
+          subcategory: data.subcategory || '',
+          coverImage: data.coverImage || ''
+        });
       } catch (err) {
         console.error('Fetch error:', err);
         setError(err.message);
@@ -53,7 +71,56 @@ const CourseViewModal = ({ isOpen, onClose, courseId }) => {
   const handleClose = () => {
     setCourse(null);
     setError(null);
+    setIsEditing(false);
     onClose();
+  };
+
+  const handleEditToggle = () => {
+    setIsEditing(!isEditing);
+  };
+
+  const handleEditChange = (e) => {
+    setEditFormData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }));
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setUpdateLoading(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+      
+      const response = await fetch(`${baseURL}/api/courses/${courseId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(editFormData)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const updatedCourse = await response.json();
+      setCourse(updatedCourse);
+      setIsEditing(false);
+      
+      // Show success message (you can replace this with your preferred notification system)
+      alert('Course updated successfully!');
+      
+    } catch (err) {
+      console.error('Update error:', err);
+      alert(`Failed to update course: ${err.message}`);
+    } finally {
+      setUpdateLoading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -71,7 +138,9 @@ const CourseViewModal = ({ isOpen, onClose, courseId }) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <h2 className="text-2xl font-bold">Course Details</h2>
+          <h2 className="text-2xl font-bold">
+            {isEditing ? 'Edit Course' : 'Course Details'}
+          </h2>
         </div>
 
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
@@ -90,84 +159,195 @@ const CourseViewModal = ({ isOpen, onClose, courseId }) => {
             </div>
           ) : course ? (
             <div className="space-y-6">
-          
-              {course.coverImage && (
-                <div className="w-full">
-                  <div className="rounded-xl overflow-hidden shadow-lg">
-                    <img 
-                      src={course.coverImage} 
-                      alt={course.title}
-                      className="w-full h-64 object-cover"
-                      onError={(e) => {
-                        e.target.src = 'https://via.placeholder.com/800x300/f3f4f6/9ca3af?text=Course+Image';
-                      }}
+              {isEditing ? (
+                /* Edit Form */
+                <form onSubmit={handleEditSubmit} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Course Title
+                    </label>
+                    <input
+                      name="title"
+                      type="text"
+                      required
+                      value={editFormData.title}
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                     />
                   </div>
-                </div>
-              )}
 
-              <div className="text-center">
-                <h1 className="text-3xl font-bold text-gray-900 mb-4">
-                  {course.title}
-                </h1>
-              </div>
-
-              {/* Course Tags */}
-              <div className="flex flex-wrap justify-center gap-3 mb-6">
-                <span className="inline-flex items-center px-4 py-2 rounded-full bg-indigo-100 text-indigo-800 font-semibold">
-                  {course.category}
-                </span>
-                {course.subcategory && (
-                  <span className="inline-flex items-center px-4 py-2 rounded-full bg-gray-100 text-gray-700 font-semibold">
-                    {course.subcategory}
-                  </span>
-                )}
-                <span className="inline-flex items-center px-4 py-2 rounded-full bg-green-100 text-green-800 font-semibold">
-                  {course.level}
-                </span>
-              </div>
-
-         
-              <div className="bg-gray-50 rounded-xl p-6">
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">Description</h3>
-                <p className="text-gray-700 leading-relaxed text-lg">
-                  {course.description}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-indigo-50 p-6 rounded-xl text-center">
-                  <div className="text-indigo-600 mb-2">
-                    <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      name="description"
+                      required
+                      rows="4"
+                      value={editFormData.description}
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all resize-none"
+                    />
                   </div>
-                  <h4 className="font-semibold text-indigo-800 mb-1">Category</h4>
-                  <p className="text-indigo-700">{course.category}</p>
-                </div>
 
-                {course.subcategory && (
-                  <div className="bg-gray-50 p-6 rounded-xl text-center">
-                    <div className="text-gray-600 mb-2">
-                      <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                      </svg>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Level
+                      </label>
+                      <select
+                        name="level"
+                        value={editFormData.level}
+                        onChange={handleEditChange}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                      >
+                        <option value="Beginner">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                      </select>
                     </div>
-                    <h4 className="font-semibold text-gray-700 mb-1">Subcategory</h4>
-                    <p className="text-gray-600">{course.subcategory}</p>
-                  </div>
-                )}
 
-                <div className="bg-green-50 p-6 rounded-xl text-center">
-                  <div className="text-green-600 mb-2">
-                    <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Category
+                      </label>
+                      <select
+                        name="category"
+                        value={editFormData.category}
+                        onChange={handleEditChange}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                      >
+                        <option value="WebDevelopment">WebDevelopment</option>
+                        <option value="CyberSecurity">CyberSecurity</option>
+                        <option value="Data Management">Data Management</option>
+                        <option value="Data Analyst">Data Analyst</option>
+                        <option value="Data Science">Data Science</option>
+                        <option value="Embedded Systems">Embedded Systems</option>
+                      </select>
+                    </div>
                   </div>
-                  <h4 className="font-semibold text-green-800 mb-1">Level</h4>
-                  <p className="text-green-700">{course.level}</p>
-                </div>
-              </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Subcategory
+                    </label>
+                    <input
+                      name="subcategory"
+                      type="text"
+                      value={editFormData.subcategory}
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Cover Image
+                    </label>
+                    <input
+                      name="coverImage"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setEditFormData(prev => ({
+                              ...prev,
+                              coverImage: reader.result
+                            }));
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+                </form>
+              ) : (
+                /* View Mode */
+                <>
+                  {course.coverImage && (
+                    <div className="w-full">
+                      <div className="rounded-xl overflow-hidden shadow-lg">
+                        <img 
+                          src={course.coverImage} 
+                          alt={course.title}
+                          className="w-full h-64 object-cover"
+                          onError={(e) => {
+                            e.target.src = 'https://via.placeholder.com/800x300/f3f4f6/9ca3af?text=Course+Image';
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-center">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-4">
+                      {course.title}
+                    </h1>
+                  </div>
+
+                  {/* Course Tags */}
+                  <div className="flex flex-wrap justify-center gap-3 mb-6">
+                    <span className="inline-flex items-center px-4 py-2 rounded-full bg-indigo-100 text-indigo-800 font-semibold">
+                      {course.category}
+                    </span>
+                    {course.subcategory && (
+                      <span className="inline-flex items-center px-4 py-2 rounded-full bg-gray-100 text-gray-700 font-semibold">
+                        {course.subcategory}
+                      </span>
+                    )}
+                    <span className="inline-flex items-center px-4 py-2 rounded-full bg-green-100 text-green-800 font-semibold">
+                      {course.level}
+                    </span>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-xl p-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-4">Description</h3>
+                    <p className="text-gray-700 leading-relaxed text-lg">
+                      {course.description}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-indigo-50 p-6 rounded-xl text-center">
+                      <div className="text-indigo-600 mb-2">
+                        <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                      </div>
+                      <h4 className="font-semibold text-indigo-800 mb-1">Category</h4>
+                      <p className="text-indigo-700">{course.category}</p>
+                    </div>
+
+                    {course.subcategory && (
+                      <div className="bg-gray-50 p-6 rounded-xl text-center">
+                        <div className="text-gray-600 mb-2">
+                          <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                          </svg>
+                        </div>
+                        <h4 className="font-semibold text-gray-700 mb-1">Subcategory</h4>
+                        <p className="text-gray-600">{course.subcategory}</p>
+                      </div>
+                    )}
+
+                    <div className="bg-green-50 p-6 rounded-xl text-center">
+                      <div className="text-green-600 mb-2">
+                        <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      </div>
+                      <h4 className="font-semibold text-green-800 mb-1">Level</h4>
+                      <p className="text-green-700">{course.level}</p>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="text-center py-12">
@@ -179,16 +359,42 @@ const CourseViewModal = ({ isOpen, onClose, courseId }) => {
         {/* Footer */}
         <div className="border-t border-gray-200 p-6 bg-gray-50">
           <div className="flex justify-end space-x-3">
-            <button
-              onClick={handleClose}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
-            >
-              Close
-            </button>
-            {course && (
-              <button className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all">
-                Edit Course
-              </button>
+            {isEditing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleEditToggle}
+                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="edit-course-form"
+                  onClick={handleEditSubmit}
+                  disabled={updateLoading}
+                  className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
+                >
+                  {updateLoading ? 'Updating...' : 'Save Changes'}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={handleClose}
+                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  Close
+                </button>
+                {course && (
+                  <button 
+                    onClick={handleEditToggle}
+                    className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all"
+                  >
+                    Edit Course
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchMyCourses } from '../redux/courseSlice';
 import CourseViewModal from '../components/CourseViewModal';
+import CourseEditModal from '../components/CourseEditModal';
 
 const MyCourses = () => {
   const dispatch = useDispatch();
@@ -11,7 +12,8 @@ const MyCourses = () => {
   const token = useSelector((state) => state.auth.token);
   
   // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState(null);
 
   useEffect(() => {
@@ -26,17 +28,24 @@ const MyCourses = () => {
 
   const handleViewCourse = (courseId) => {
     setSelectedCourseId(courseId);
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedCourseId(null);
+    setIsViewModalOpen(true);
   };
 
   const handleEditCourse = (courseId) => {
-    // Navigate to edit page or open edit modal
-    navigate(`/courses/edit/${courseId}`);
+    setSelectedCourseId(courseId);
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseViewModal = () => {
+    setIsViewModalOpen(false);
+    setSelectedCourseId(null);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setSelectedCourseId(null);
+    // Refresh courses list after editing
+    dispatch(fetchMyCourses());
   };
 
   if (loading) {
@@ -126,10 +135,20 @@ const MyCourses = () => {
               >
                 {/* Course Image Placeholder */}
                 <div className={`h-48 bg-gradient-to-br ${getGradientColor(index)} relative overflow-hidden`}>
+                  {course.coverImage ? (
+                    <img
+                      src={course.coverImage}
+                      alt={course.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                  ) : null}
                   <div className="absolute inset-0 bg-black bg-opacity-20 group-hover:bg-opacity-10 transition-all duration-300"></div>
                   <div className="absolute bottom-4 left-4 right-4">
                     <span className="inline-block px-3 py-1 bg-white bg-opacity-90 text-gray-800 text-sm font-medium rounded-full">
-                      {course.category}
+                      {course.category || 'Uncategorized'}
                     </span>
                   </div>
                 </div>
@@ -154,12 +173,14 @@ const MyCourses = () => {
                       </svg>
                       {course.enrolledStudents || 0} students
                     </div>
-                    <div className="flex items-center">
-                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      {course.duration || 'Self-paced'}
-                    </div>
+                    {course.level && (
+                      <div className="flex items-center">
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        {course.level}
+                      </div>
+                    )}
                   </div>
 
                   {/* Action Buttons */}
@@ -186,8 +207,15 @@ const MyCourses = () => {
 
       {/* Course View Modal */}
       <CourseViewModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
+        isOpen={isViewModalOpen}
+        onClose={handleCloseViewModal}
+        courseId={selectedCourseId}
+      />
+
+      {/* Course Edit Modal */}
+      <CourseEditModal
+        isOpen={isEditModalOpen}
+        onClose={handleCloseEditModal}
         courseId={selectedCourseId}
       />
     </div>
