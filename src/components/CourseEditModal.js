@@ -1,54 +1,60 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { updateCourse, clearUpdateStatus } from '../redux/courseSlice';
-import Snackbar from '@mui/material/Snackbar';
-import MuiAlert from '@mui/material/Alert';
 
-const Alert = React.forwardRef(function Alert(props, ref) {
-    return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
-});
-
-const CourseEditModal = ({ course, onClose, onSuccess, open }) => {
-    const dispatch = useDispatch();
-    const { updateLoading, updateError } = useSelector(state => state.courses);
-    const { user } = useSelector(state => state.auth);
-
+const EditCourseModal = ({ isOpen, onClose, courseId }) => {
+    const [loading, setLoading] = useState(false);
+    const [updateLoading, setUpdateLoading] = useState(false);
+    const [error, setError] = useState(null);
     const [formData, setFormData] = useState({
         title: '',
         description: '',
-        level: 'Beginner',
-        category: 'WebDevelopment',
+        level: '',
+        category: '',
         subcategory: '',
         coverImage: ''
     });
 
-    const [openSnackbar, setOpenSnackbar] = useState(false);
-    const [snackbarMessage, setSnackbarMessage] = useState('');
-    const [snackbarSeverity, setSnackbarSeverity] = useState('success');
-    const [imagePreview, setImagePreview] = useState('');
-
     useEffect(() => {
-        if (course) {
-            setFormData({
-                title: course.title || '',
-                description: course.description || '',
-                level: course.level || 'Beginner',
-                category: course.category || 'WebDevelopment',
-                subcategory: course.subcategory || '',
-                coverImage: course.coverImage || ''
-            });
-            setImagePreview(course.coverImage || '');
-        }
-    }, [course]);
+        if (!isOpen || !courseId) return;
 
-    useEffect(() => {
-        if (updateError) {
-            setSnackbarMessage(updateError);
-            setSnackbarSeverity('error');
-            setOpenSnackbar(true);
-            dispatch(clearUpdateStatus());
-        }
-    }, [updateError, dispatch]);
+        const fetchCourse = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const token = localStorage.getItem('token');
+                const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+
+                const response = await fetch(`${baseURL}/api/courses/${courseId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                setFormData({
+                    title: data.title || '',
+                    description: data.description || '',
+                    level: data.level || '',
+                    category: data.category || '',
+                    subcategory: data.subcategory || '',
+                    coverImage: data.coverImage || ''
+                });
+            } catch (err) {
+                console.error('Error fetching course:', err);
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCourse();
+    }, [isOpen, courseId]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -58,17 +64,15 @@ const CourseEditModal = ({ course, onClose, onSuccess, open }) => {
         }));
     };
 
-    const handleImageChange = (e) => {
+    const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (file) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                const result = reader.result;
                 setFormData(prev => ({
                     ...prev,
-                    coverImage: result
+                    coverImage: reader.result
                 }));
-                setImagePreview(result);
             };
             reader.readAsDataURL(file);
         }
@@ -76,219 +80,198 @@ const CourseEditModal = ({ course, onClose, onSuccess, open }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        if (!course?._id) {
-            setSnackbarMessage('Course ID is missing');
-            setSnackbarSeverity('error');
-            setOpenSnackbar(true);
-            return;
-        }
+        setUpdateLoading(true);
+        setError(null);
 
         try {
-            const resultAction = await dispatch(updateCourse({
-                courseId: course._id,
-                courseData: formData
-            }));
-
-            if (resultAction.meta && resultAction.meta.requestStatus === 'fulfilled') {
-                setSnackbarMessage('Course updated successfully!');
-                setSnackbarSeverity('success');
-                setOpenSnackbar(true);
-
-                setTimeout(() => {
-                    onSuccess && onSuccess();
-                    onClose();
-                }, 1500);
-            } else {
-                const errorMsg = resultAction.error?.message || 'Update failed';
-                setSnackbarMessage(errorMsg);
-                setSnackbarSeverity('error');
-                setOpenSnackbar(true);
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('No authentication token found');
             }
-        } catch (error) {
-            console.error('Update failed:', error);
-            setSnackbarMessage('Failed to update course');
-            setSnackbarSeverity('error');
-            setOpenSnackbar(true);
+
+            const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+            const payload = {
+                ...formData,
+                // Remove the base64 prefix if it exists (for existing images)
+                coverImage: formData.coverImage.startsWith('data:')
+                    ? formData.coverImage
+                    : formData.coverImage
+            };
+
+            const response = await fetch(`${baseURL}/api/courses/${courseId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Failed to update course (status ${response.status})`);
+            }
+
+            alert('Course updated successfully!');
+            onClose(true); // Pass true to indicate success if parent component needs to know
+        } catch (err) {
+            console.error('Error updating course:', err);
+            setError(err.message || 'Failed to update course');
+        } finally {
+            setUpdateLoading(false);
         }
     };
 
-    const handleClose = () => {
-        dispatch(clearUpdateStatus());
-        if (onClose) onClose();
-    };
-
-    if (!open) return null;
+    if (!isOpen) return null;
 
     return (
-        <>
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto grid md:grid-cols-[1fr,2fr] gap-0">
-                    <div className="bg-gradient-to-br from-indigo-600 to-purple-600 p-8 flex flex-col items-center justify-center text-white relative">
-                        <button
-                            onClick={handleClose}
-                            className="absolute top-4 right-4 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-full p-2 transition-all w-8 h-8 flex items-center justify-center text-white font-bold"
-                        >
-                            ×
-                        </button>
-                        <div className="text-center mb-6">
-                            <div className="w-32 h-32 bg-white bg-opacity-20 backdrop-blur-sm rounded-xl mb-4 flex items-center justify-center overflow-hidden">
-                                {imagePreview ? (
-                                    <img
-                                        src={imagePreview}
-                                        alt="Course preview"
-                                        className="w-full h-full object-cover"
-                                    />
-                                ) : (
-                                    <div className="text-4xl">📚</div>
-                                )}
-                            </div>
-                            <h3 className="text-xl font-bold mb-2">
-                                {formData.title || 'Course Title'}
-                            </h3>
-                            <div className="space-y-1 text-sm text-indigo-100">
-                                <p><span className="font-semibold">Level:</span> {formData.level}</p>
-                                <p><span className="font-semibold">Category:</span> {formData.category}</p>
-                                {formData.subcategory && (
-                                    <p><span className="font-semibold">Subcategory:</span> {formData.subcategory}</p>
-                                )}
-                            </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-auto shadow-xl">
+                <div className="bg-indigo-600 text-white p-6 relative rounded-t-2xl">
+                    <h2 className="text-2xl font-bold">Edit Course</h2>
+                    <button
+                        onClick={onClose}
+                        className="absolute top-4 right-4 text-white hover:text-gray-300"
+                        aria-label="Close modal"
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div className="p-6">
+                    {loading ? (
+                        <div className="flex justify-center py-12">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
                         </div>
-                        <div className="mt-auto text-center">
-                            <div className="w-16 h-16 bg-white bg-opacity-20 backdrop-blur-sm rounded-full flex items-center justify-center text-xl mb-2">
-                                {user?.name?.charAt(0).toUpperCase()}
-                            </div>
-                            <p className="text-sm font-semibold">{user?.name}</p>
-                            <p className="text-xs text-indigo-100">{user?.email}</p>
+                    ) : error ? (
+                        <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                            {error}
                         </div>
-                    </div>
-                    <div className="p-8">
-                        <div className="text-center mb-8">
-                            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                                Edit Course
-                            </h2>
-                            <p className="text-gray-600">Update your course details</p>
-                        </div>
+                    ) : (
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Course Title
-                                </label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">Title</label>
                                 <input
                                     name="title"
                                     type="text"
-                                    placeholder="Enter course title"
                                     value={formData.title}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all border-gray-300"
+                                    required
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
+
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Description
-                                </label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
                                 <textarea
                                     name="description"
-                                    placeholder="Course description"
-                                    rows={5}
+                                    rows="4"
                                     value={formData.description}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none border-gray-300"
+                                    required
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Level
-                                </label>
-                                <select
-                                    name="level"
-                                    value={formData.level}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all border-gray-300"
-                                >
-                                    <option value="Beginner">Beginner</option>
-                                    <option value="Intermediate">Intermediate</option>
-                                    <option value="Advanced">Advanced</option>
-                                </select>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Level</label>
+                                    <select
+                                        name="level"
+                                        value={formData.level}
+                                        onChange={handleChange}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="Beginner">Beginner</option>
+                                        <option value="Intermediate">Intermediate</option>
+                                        <option value="Advanced">Advanced</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
+                                    <select
+                                        name="category"
+                                        value={formData.category}
+                                        onChange={handleChange}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="WebDevelopment">Web Development</option>
+                                        <option value="CyberSecurity">Cyber Security</option>
+                                        <option value="DataManagement">Data Management</option>
+                                        <option value="DataAnalyst">Data Analyst</option>
+                                        <option value="DataScience">Data Science</option>
+                                        <option value="EmbeddedSystems">Embedded Systems</option>
+                                    </select>
+                                </div>
                             </div>
+
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Category
-                                </label>
-                                <select
-                                    name="category"
-                                    value={formData.category}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all border-gray-300"
-                                >
-                                    <option value="WebDevelopment">Web Development</option>
-                                    <option value="MobileDevelopment">Mobile Development</option>
-                                    <option value="DataScience">Data Science</option>
-                                    <option value="Design">Design</option>
-                                    <option value="Marketing">Marketing</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Subcategory (optional)
-                                </label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">Subcategory</label>
                                 <input
                                     name="subcategory"
                                     type="text"
-                                    placeholder="Enter subcategory"
                                     value={formData.subcategory}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
+
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Cover Image
-                                </label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">Cover Image</label>
                                 <input
                                     name="coverImage"
                                     type="file"
                                     accept="image/*"
-                                    onChange={handleImageChange}
-                                    className="w-full text-gray-600"
+                                    onChange={handleFileChange}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
-                                {imagePreview && (
+                                {formData.coverImage && (
                                     <img
-                                        src={imagePreview}
-                                        alt="Preview"
-                                        className="mt-3 w-48 h-32 object-cover rounded-md border border-gray-300"
+                                        src={formData.coverImage}
+                                        alt="Cover Preview"
+                                        className="mt-4 w-full h-48 object-cover rounded-xl"
+                                        onError={(e) => {
+                                            e.target.src = 'https://via.placeholder.com/400x200?text=No+Image';
+                                        }}
                                     />
                                 )}
                             </div>
-                            <div>
+
+                            <div className="flex justify-end space-x-4">
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    className="px-6 py-3 border border-gray-300 rounded-xl font-semibold hover:bg-gray-50"
+                                >
+                                    Cancel
+                                </button>
                                 <button
                                     type="submit"
                                     disabled={updateLoading}
-                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-all disabled:opacity-50"
+                                    className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50"
                                 >
-                                    {updateLoading ? 'Updating...' : 'Update Course'}
+                                    {updateLoading ? (
+                                        <span className="flex items-center justify-center">
+                                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            Updating...
+                                        </span>
+                                    ) : 'Update Course'}
                                 </button>
                             </div>
                         </form>
-                    </div>
+                    )}
                 </div>
             </div>
-            <Snackbar
-                open={openSnackbar}
-                autoHideDuration={4000}
-                onClose={() => setOpenSnackbar(false)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-            >
-                <Alert
-                    onClose={() => setOpenSnackbar(false)}
-                    severity={snackbarSeverity}
-                    sx={{ width: '100%' }}
-                >
-                    {snackbarMessage}
-                </Alert>
-            </Snackbar>
-        </>
+        </div>
     );
 };
 
-export default CourseEditModal;
+export default EditCourseModal;

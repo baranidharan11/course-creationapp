@@ -17,8 +17,8 @@ const CourseForm = () => {
     const [formData, setFormData] = useState({
         title: '',
         description: '',
-        level: 'Beginner',
-        category: 'WebDevelopment',
+        level: '',
+        category: '',
         subcategory: '',
         coverImage: ''
     });

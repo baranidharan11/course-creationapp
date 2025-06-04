@@ -112,7 +112,6 @@ const CourseViewModal = ({ isOpen, onClose, courseId }) => {
       setCourse(updatedCourse);
       setIsEditing(false);
       
-      // Show success message (you can replace this with your preferred notification system)
       alert('Course updated successfully!');
       
     } catch (err) {
@@ -291,7 +290,6 @@ const CourseViewModal = ({ isOpen, onClose, courseId }) => {
                     </h1>
                   </div>
 
-                  {/* Course Tags */}
                   <div className="flex flex-wrap justify-center gap-3 mb-6">
                     <span className="inline-flex items-center px-4 py-2 rounded-full bg-indigo-100 text-indigo-800 font-semibold">
                       {course.category}
@@ -356,7 +354,6 @@ const CourseViewModal = ({ isOpen, onClose, courseId }) => {
           )}
         </div>
 
-        {/* Footer */}
         <div className="border-t border-gray-200 p-6 bg-gray-50">
           <div className="flex justify-end space-x-3">
             {isEditing ? (

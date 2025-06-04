@@ -1,19 +1,18 @@
+// src/features/courses/coursesSlice.js
+
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-// Helper: Headers with token
 const getAuthHeaders = (token) => ({
   Authorization: `Bearer ${token}`,
   'Content-Type': 'application/json',
 });
 
-// Normalize course id field
 const normalizeCourse = (course) => ({
   ...course,
   _id: course._id || course.id || '',
 });
 
-// Thunks inside slice file
-
+// Thunks
 export const fetchMyCourses = createAsyncThunk(
   'courses/fetchMyCourses',
   async (_, { getState, rejectWithValue }) => {
@@ -31,7 +30,6 @@ export const fetchMyCourses = createAsyncThunk(
       }
 
       const data = await response.json();
-
       return data.map(normalizeCourse);
     } catch (error) {
       console.error('fetchMyCourses error:', error);
@@ -123,6 +121,7 @@ export const deleteCourse = createAsyncThunk(
   }
 );
 
+// Initial state
 const initialState = {
   myCourses: [],
   selectedCourse: null,
@@ -136,6 +135,7 @@ const initialState = {
   deleteError: null,
 };
 
+// Slice
 const coursesSlice = createSlice({
   name: 'courses',
   initialState,
@@ -193,14 +193,8 @@ const coursesSlice = createSlice({
       .addCase(updateCourse.fulfilled, (state, action) => {
         state.updateLoading = false;
         const updatedCourse = action.payload;
-        if (!updatedCourse._id) {
-          console.error('updateCourse fulfilled: missing _id', updatedCourse);
-          return;
-        }
         const index = state.myCourses.findIndex((c) => c._id === updatedCourse._id);
-        if (index !== -1) {
-          state.myCourses[index] = updatedCourse;
-        }
+        if (index !== -1) state.myCourses[index] = updatedCourse;
         if (state.selectedCourse && state.selectedCourse._id === updatedCourse._id) {
           state.selectedCourse = updatedCourse;
         }
@@ -217,9 +211,9 @@ const coursesSlice = createSlice({
       })
       .addCase(deleteCourse.fulfilled, (state, action) => {
         state.deleteLoading = false;
-        const deletedCourseId = action.payload;
-        state.myCourses = state.myCourses.filter((c) => c._id !== deletedCourseId);
-        if (state.selectedCourse && state.selectedCourse._id === deletedCourseId) {
+        const deletedId = action.payload;
+        state.myCourses = state.myCourses.filter((c) => c._id !== deletedId);
+        if (state.selectedCourse && state.selectedCourse._id === deletedId) {
           state.selectedCourse = null;
         }
       })
@@ -230,6 +224,10 @@ const coursesSlice = createSlice({
   },
 });
 
-export const { clearSelectedCourse, clearErrors, clearUpdateStatus } = coursesSlice.actions;
+export const {
+  clearSelectedCourse,
+  clearErrors,
+  clearUpdateStatus,
+} = coursesSlice.actions;
 
 export default coursesSlice.reducer;
